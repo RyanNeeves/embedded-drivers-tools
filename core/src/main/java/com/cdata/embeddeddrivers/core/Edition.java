@@ -1,48 +1,64 @@
 package com.cdata.embeddeddrivers.core;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
-/** A CData driver edition and its layout within the OEM builds bucket. */
+/**
+ * A CData driver edition and its layout within the OEM builds bucket.
+ *
+ * Bucket naming is consistent per edition: artifact filenames are a fixed
+ * wrapper around the lowercase connector name (e.g. "cdata.jdbc.{name}.jar"),
+ * and bld-* build markers are a fixed prefix plus the connector name and
+ * build number. Marker connector names are display-cased in the ADO and
+ * ODBC Windows editions (e.g. "SAPConcur"), so name comparison is always
+ * case-insensitive.
+ */
 public enum Edition {
-    JDBC("JDBC", "jdbc",
-            Pattern.compile("^bld-cdata\\.jdbc\\.(.+)\\.(\\d+)$"),
-            List.of(Pattern.compile("(?i)^cdata\\.jdbc\\.(.+)\\.jar$"))),
-    ADO_NET_FRAMEWORK("ADO .NET FRAMEWORK", "ado/net40",
-            Pattern.compile("^bld-System\\.Data\\.CData\\.(.+)\\.(\\d+)$"),
-            List.of(Pattern.compile("(?i)^system\\.data\\.cdata\\.(.+)\\.dll$"))),
-    ADO_NET_STANDARD("ADO .NET STANDARD", "ado/netstandard20",
-            Pattern.compile("^bld-System\\.Data\\.CData\\.(.+)\\.(\\d+)$"),
-            List.of(Pattern.compile("(?i)^system\\.data\\.cdata\\.(.+)\\.dll$"))),
-    ODBC_UNIX("ODBC UNIX", "odbc/linux/x64",
-            Pattern.compile("^bld-[Cc][Dd]ata\\.[Oo][Dd][Bb][Cc]\\.(.+)\\.(\\d+)$"),
-            List.of(Pattern.compile("(?i)^cdata\\.odbc\\.(.+)\\.ini$"),
-                    Pattern.compile("(?i)^lib(.+)odbc\\.x64\\.so$"))),
-    ODBC_WINDOWS("ODBC WINDOWS", "odbc/net40/x64",
-            Pattern.compile("^bld-[Cc][Dd]ata\\.[Oo][Dd][Bb][Cc]\\.(.+)\\.(\\d+)$"),
-            List.of(Pattern.compile("(?i)^cdata\\.odbc\\.(.+)\\.dll$"))),
-    PYTHON_MAC("PYTHON MAC", "python/mac",
-            Pattern.compile("^bld-(.+)\\.(\\d+)$"),
-            List.of(Pattern.compile("(?i)^(.+)\\.setup_mac\\.zip$"))),
-    PYTHON_UNIX("PYTHON UNIX", "python/unix",
-            Pattern.compile("^bld-(.+)\\.(\\d+)$"),
-            List.of(Pattern.compile("(?i)^(.+)\\.setup_unix\\.zip$"))),
-    PYTHON_WINDOWS("PYTHON WINDOWS", "python/win",
-            Pattern.compile("^bld-(.+)\\.(\\d+)$"),
-            List.of(Pattern.compile("(?i)^(.+)\\.setup_win\\.zip$")));
+    JDBC("JDBC", "jdbc", "bld-cdata.jdbc.",
+            List.of(new ArtifactTemplate("cdata.jdbc.", ".jar"))),
+    ADO_NET_FRAMEWORK("ADO .NET FRAMEWORK", "ado/net40", "bld-System.Data.CData.",
+            List.of(new ArtifactTemplate("system.data.cdata.", ".dll"))),
+    ADO_NET_STANDARD("ADO .NET STANDARD", "ado/netstandard20", "bld-System.Data.CData.",
+            List.of(new ArtifactTemplate("system.data.cdata.", ".dll"))),
+    ODBC_UNIX("ODBC UNIX", "odbc/linux/x64", "bld-cdata.odbc.",
+            List.of(new ArtifactTemplate("cdata.odbc.", ".ini"),
+                    new ArtifactTemplate("lib", "odbc.x64.so"))),
+    ODBC_WINDOWS("ODBC WINDOWS", "odbc/net40/x64", "bld-CData.ODBC.",
+            List.of(new ArtifactTemplate("CData.ODBC.", ".dll"))),
+    PYTHON_MAC("PYTHON MAC", "python/mac", "bld-",
+            List.of(new ArtifactTemplate("", ".setup_mac.zip"))),
+    PYTHON_UNIX("PYTHON UNIX", "python/unix", "bld-",
+            List.of(new ArtifactTemplate("", ".setup_unix.zip"))),
+    PYTHON_WINDOWS("PYTHON WINDOWS", "python/win", "bld-",
+            List.of(new ArtifactTemplate("", ".setup_win.zip")));
+
+    /** A driver artifact filename shape: fixed prefix + lowercase connector name + fixed suffix. */
+    public record ArtifactTemplate(String prefix, String suffix) {
+
+        public String filenameFor(String connectorName) {
+            return prefix + connectorName.toLowerCase(Locale.ROOT) + suffix;
+        }
+
+        /** The connector-name portion of a matching filename, or null if the filename doesn't fit this template. */
+        public String connectorOf(String filename) {
+            if (filename.length() <= prefix.length() + suffix.length()) return null;
+            if (!filename.regionMatches(true, 0, prefix, 0, prefix.length())) return null;
+            if (!filename.regionMatches(true, filename.length() - suffix.length(), suffix, 0, suffix.length())) return null;
+            return filename.substring(prefix.length(), filename.length() - suffix.length());
+        }
+    }
 
     private final String displayName;
     private final String subpath;
-    private final Pattern bldPattern;
-    private final List<Pattern> artifactPatterns;
+    private final String bldMarkerPrefix;
+    private final List<ArtifactTemplate> artifactTemplates;
 
-    Edition(String displayName, String subpath, Pattern bldPattern, List<Pattern> artifactPatterns) {
+    Edition(String displayName, String subpath, String bldMarkerPrefix, List<ArtifactTemplate> artifactTemplates) {
         this.displayName = displayName;
         this.subpath = subpath;
-        this.bldPattern = bldPattern;
-        this.artifactPatterns = artifactPatterns;
+        this.bldMarkerPrefix = bldMarkerPrefix;
+        this.artifactTemplates = artifactTemplates;
     }
 
     public String displayName() {
@@ -54,9 +70,9 @@ public enum Edition {
         return subpath;
     }
 
-    /** Pattern matching this edition's bld-* marker filenames; group 1 = connector, group 2 = build number. */
-    public Pattern bldPattern() {
-        return bldPattern;
+    /** Exact-cased bld-* marker prefix, usable directly as an S3 key prefix (e.g. "bld-System.Data.CData."). */
+    public String bldMarkerPrefix() {
+        return bldMarkerPrefix;
     }
 
     /** Top-level changelog dir for this edition (e.g. "ADO .NET FRAMEWORK" -> "ado"). */
@@ -65,21 +81,47 @@ public enum Edition {
         return slash >= 0 ? subpath.substring(0, slash) : subpath;
     }
 
-    /** Whether a driver artifact filename in this edition belongs to the given connector. */
-    public boolean artifactMatchesConnector(String filename, String connectorName) {
-        for (Pattern p : artifactPatterns) {
-            Matcher m = p.matcher(filename);
-            if (m.matches() && m.group(1).equalsIgnoreCase(connectorName)) return true;
+    /** The exact artifact filenames a connector publishes in this edition. */
+    public List<String> artifactFilenames(String connectorName) {
+        List<String> names = new ArrayList<>(artifactTemplates.size());
+        for (ArtifactTemplate t : artifactTemplates) {
+            names.add(t.filenameFor(connectorName));
         }
-        return false;
+        return names;
     }
 
     /** Whether a filename is a downloadable driver artifact of this edition (as opposed to a bld-* marker). */
     public boolean isDriverArtifact(String filename) {
-        for (Pattern p : artifactPatterns) {
-            if (p.matcher(filename).matches()) return true;
+        for (ArtifactTemplate t : artifactTemplates) {
+            if (t.connectorOf(filename) != null) return true;
         }
         return false;
+    }
+
+    /** Whether a driver artifact filename in this edition belongs to the given connector. */
+    public boolean artifactMatchesConnector(String filename, String connectorName) {
+        for (ArtifactTemplate t : artifactTemplates) {
+            String name = t.connectorOf(filename);
+            if (name != null && name.equalsIgnoreCase(connectorName)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Extracts the build number from a bld-* marker filename if it belongs to
+     * the given connector (name compared case-insensitively). Returns -1 otherwise.
+     */
+    public int markerBuild(String filename, String connectorName) {
+        if (!filename.regionMatches(true, 0, bldMarkerPrefix, 0, bldMarkerPrefix.length())) return -1;
+        String rest = filename.substring(bldMarkerPrefix.length());
+        int dot = rest.lastIndexOf('.');
+        if (dot <= 0 || dot == rest.length() - 1) return -1;
+        if (!rest.substring(0, dot).equalsIgnoreCase(connectorName)) return -1;
+        try {
+            return Integer.parseInt(rest.substring(dot + 1));
+        } catch (NumberFormatException e) {
+            return -1;
+        }
     }
 
     /**

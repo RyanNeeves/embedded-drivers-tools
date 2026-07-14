@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 class EditionTest {
@@ -36,6 +38,15 @@ class EditionTest {
     }
 
     @Test
+    void constructsArtifactFilenames() {
+        assertEquals(List.of("cdata.jdbc.salesforce.jar"), Edition.JDBC.artifactFilenames("Salesforce"));
+        assertEquals(List.of("CData.ODBC.salesforce.dll"), Edition.ODBC_WINDOWS.artifactFilenames("Salesforce"));
+        assertEquals(List.of("cdata.odbc.salesforce.ini", "libsalesforceodbc.x64.so"),
+                Edition.ODBC_UNIX.artifactFilenames("salesforce"));
+        assertEquals(List.of("salesforce.setup_win.zip"), Edition.PYTHON_WINDOWS.artifactFilenames("SALESFORCE"));
+    }
+
+    @Test
     void recognizesDriverArtifacts() {
         assertTrue(Edition.JDBC.isDriverArtifact("cdata.jdbc.salesforce.jar"));
         assertTrue(Edition.ADO_NET_FRAMEWORK.isDriverArtifact("system.data.cdata.salesforce.dll"));
@@ -58,5 +69,18 @@ class EditionTest {
         assertFalse(Edition.JDBC.artifactMatchesConnector("cdata.jdbc.mysql.jar", "salesforce"));
         // "sql" must not match "mysql" artifacts
         assertFalse(Edition.JDBC.artifactMatchesConnector("cdata.jdbc.mysql.jar", "sql"));
+    }
+
+    @Test
+    void extractsBuildFromMarkers() {
+        assertEquals(9655, Edition.JDBC.markerBuild("bld-cdata.jdbc.salesforce.9655", "salesforce"));
+        // ADO and ODBC Windows markers use display-cased connector names
+        assertEquals(9655, Edition.ADO_NET_FRAMEWORK.markerBuild("bld-System.Data.CData.SAPConcur.9655", "sapconcur"));
+        assertEquals(9655, Edition.ODBC_WINDOWS.markerBuild("bld-CData.ODBC.AAS.9655", "aas"));
+        assertEquals(9655, Edition.PYTHON_WINDOWS.markerBuild("bld-zendesk.9655", "Zendesk"));
+
+        assertEquals(-1, Edition.JDBC.markerBuild("bld-cdata.jdbc.mysql.9655", "salesforce"));
+        assertEquals(-1, Edition.JDBC.markerBuild("cdata.jdbc.salesforce.jar", "salesforce"));
+        assertEquals(-1, Edition.JDBC.markerBuild("bld-cdata.jdbc.salesforce.notanumber", "salesforce"));
     }
 }

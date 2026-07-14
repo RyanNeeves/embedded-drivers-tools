@@ -9,9 +9,9 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -30,14 +30,13 @@ public class OemBuildsClient {
     private static final String CHANGELOG_ROOT = BASE_URL + "/changelogs";
 
     /** Releases that predate bld-* markers in the bucket, mapped to their build numbers. */
-    private static final Map<String, Integer> HARDCODED_RELEASES = Map.of("v25u1", 9434);
+    private static final Map<Release, Integer> HARDCODED_RELEASES = Map.of(new Release(2025, 1), 9434);
 
     private static final Pattern PAT_S3_CONTENTS     = Pattern.compile("<Contents>(.*?)</Contents>", Pattern.DOTALL);
     private static final Pattern PAT_S3_KEY          = Pattern.compile("<Key>([^<]+)</Key>");
     private static final Pattern PAT_S3_SIZE         = Pattern.compile("<Size>(\\d+)</Size>");
     private static final Pattern PAT_S3_CONTINUATION = Pattern.compile("<NextContinuationToken>([^<]+)</NextContinuationToken>");
     private static final Pattern PAT_S3_RELEASE      = Pattern.compile("<Prefix>v(\\d{2})u(\\d+)/</Prefix>");
-    private static final Pattern PAT_RELEASE_TAG     = Pattern.compile("v(\\d{2})u(\\d+)");
 
     private final HttpClient http = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NORMAL)
@@ -102,13 +101,6 @@ public class OemBuildsClient {
         return files;
     }
 
-    /** Lists all object keys under a given S3 prefix. */
-    public List<String> listObjects(String prefix) throws IOException {
-        List<String> keys = new ArrayList<>();
-        for (RemoteFile f : listFiles(prefix)) keys.add(f.key());
-        return keys;
-    }
-
     /** Discovers all available releases from S3 prefixes and hardcoded entries, newest first. */
     public List<Release> listReleases() throws IOException {
         HttpResult res = get(BASE_URL + "/?list-type=2&prefix=v&delimiter=/");
@@ -116,19 +108,13 @@ public class OemBuildsClient {
             throw new IOException("S3 release discovery returned HTTP " + res.status());
         }
 
-        List<Release> releases = new ArrayList<>();
+        Set<Release> releases = new TreeSet<>();
         Matcher m = PAT_S3_RELEASE.matcher(res.body());
         while (m.find()) {
             releases.add(new Release(2000 + Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2))));
         }
-        for (String tag : HARDCODED_RELEASES.keySet()) {
-            Matcher hm = PAT_RELEASE_TAG.matcher(tag);
-            if (hm.matches()) {
-                releases.add(new Release(2000 + Integer.parseInt(hm.group(1)), Integer.parseInt(hm.group(2))));
-            }
-        }
-        Collections.sort(releases);
-        return releases;
+        releases.addAll(HARDCODED_RELEASES.keySet());
+        return new ArrayList<>(releases);
     }
 
     /** The newest available release. */
@@ -168,18 +154,17 @@ public class OemBuildsClient {
             throws IOException {
         Release release = new Release(majorVersion, releaseNumber);
 
-        Integer hardcoded = HARDCODED_RELEASES.get(release.tag());
+        Integer hardcoded = HARDCODED_RELEASES.get(release);
         if (hardcoded != null) return hardcoded;
 
-        requireRelease(release);
-
-        String releasePath = release.tag() + "/" + edition.subpath();
-        for (RemoteFile f : listFiles(releasePath + "/bld-")) {
-            Matcher m = edition.bldPattern().matcher(f.filename());
-            if (m.matches() && m.group(1).equalsIgnoreCase(connectorName)) {
-                return Integer.parseInt(m.group(2));
-            }
+        String markerPrefix = release.tag() + "/" + edition.subpath() + "/" + edition.bldMarkerPrefix();
+        for (RemoteFile f : listFiles(markerPrefix)) {
+            int build = edition.markerBuild(f.filename(), connectorName);
+            if (build >= 0) return build;
         }
+
+        // No marker matched: distinguish an invalid release from an unknown connector.
+        requireRelease(release);
         throw new IllegalArgumentException(
                 "No build found for '" + connectorName + "' in " + edition.displayName() + " / " + release.tag() + ".");
     }
@@ -210,23 +195,27 @@ public class OemBuildsClient {
 
     /**
      * Downloads a bucket object to {@code destDir}, keeping its filename.
+     * Streams to a .part file and renames on success, so an interrupted
+     * download never leaves a truncated file under the final name.
      * Creates the directory if needed. Returns the path written.
      */
     public Path download(RemoteFile file, Path destDir) throws IOException {
         Files.createDirectories(destDir);
         Path dest = destDir.resolve(file.filename());
+        Path part = destDir.resolve(file.filename() + ".part");
         HttpRequest request = HttpRequest.newBuilder(URI.create(file.url())).GET().build();
         try {
-            HttpResponse<Path> response = http.send(request, HttpResponse.BodyHandlers.ofFile(dest));
+            HttpResponse<Path> response = http.send(request, HttpResponse.BodyHandlers.ofFile(part));
             if (response.statusCode() != 200) {
-                Files.deleteIfExists(dest);
                 throw new IOException("HTTP " + response.statusCode() + " downloading " + file.url());
             }
-            return response.body();
+            Files.move(part, dest, StandardCopyOption.REPLACE_EXISTING);
+            return dest;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            Files.deleteIfExists(dest);
             throw new IOException("Interrupted while downloading " + file.url(), e);
+        } finally {
+            Files.deleteIfExists(part);
         }
     }
 }

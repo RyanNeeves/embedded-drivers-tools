@@ -2,6 +2,7 @@ package com.cdata.embeddeddrivers.cli.commands;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.Callable;
@@ -87,7 +88,9 @@ public class DownloadCommand implements Callable<Integer> {
         if (selection.all) {
             toDownload = available;
         } else {
-            toDownload = new ArrayList<>();
+            // Keyed by bucket key so repeated -c values can't queue the same
+            // file twice (two threads writing one path would corrupt it).
+            LinkedHashMap<String, RemoteFile> selected = new LinkedHashMap<>();
             List<String> missing = new ArrayList<>();
             for (String connector : selection.connectors) {
                 List<RemoteFile> matches = available.stream()
@@ -96,7 +99,7 @@ public class DownloadCommand implements Callable<Integer> {
                 if (matches.isEmpty()) {
                     missing.add(connector);
                 } else {
-                    toDownload.addAll(matches);
+                    for (RemoteFile f : matches) selected.putIfAbsent(f.key(), f);
                 }
             }
             if (!missing.isEmpty()) {
@@ -105,6 +108,7 @@ public class DownloadCommand implements Callable<Integer> {
                         + ". Run 'cdrm connectors' to see valid connector names.");
                 return 1;
             }
+            toDownload = new ArrayList<>(selected.values());
         }
 
         long totalBytes = toDownload.stream().mapToLong(RemoteFile::size).sum();
