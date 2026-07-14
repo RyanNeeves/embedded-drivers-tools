@@ -107,12 +107,6 @@ Requires Maven 3.9+. Run `mvn package` at the repo root; the jars land in
 `cli/target/cdrm.jar` and `mcp/target/cdata-changelog-review-mcp.jar`. Both
 run unmodified on Windows, Linux, and macOS.
 
-## Contributing
-
-Contributions are welcome. By contributing you certify the
-[Developer Certificate of Origin](https://developercertificate.org/); please
-sign off your commits with `git commit -s`.
-
 ## License
 
 Licensed under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for
