@@ -1,6 +1,6 @@
 # embedded-drivers-tools
 
-Tools for working with CData embedded / OEM drivers:
+Tools for working with CData embedded / OEM connectors:
 
 - **CData Release Manager (`cdrm`)** — a command-line tool to browse releases,
   review connector changelogs, and download builds (single connectors
