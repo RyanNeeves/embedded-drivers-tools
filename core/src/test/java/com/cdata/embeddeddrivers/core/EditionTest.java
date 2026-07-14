@@ -50,7 +50,9 @@ class EditionTest {
         assertTrue(Edition.JDBC.isDriverArtifact("cdata.jdbc.salesforce.jar"));
         assertTrue(Edition.ADO_NET_FRAMEWORK.isDriverArtifact("system.data.cdata.salesforce.dll"));
         assertTrue(Edition.ODBC_WINDOWS.isDriverArtifact("CData.ODBC.salesforce.dll"));
+        assertTrue(Edition.ODBC_WINDOWS.isDriverArtifact("CData.ODBCm.salesforce.dll"));
         assertTrue(Edition.ODBC_UNIX.isDriverArtifact("cdata.odbc.salesforce.ini"));
+        assertTrue(Edition.ODBC_UNIX.isDriverArtifact("cdata.odbcm.salesforce.jar"));
         assertTrue(Edition.ODBC_UNIX.isDriverArtifact("libsalesforceodbc.x64.so"));
         assertTrue(Edition.PYTHON_WINDOWS.isDriverArtifact("salesforce.setup_win.zip"));
 
@@ -63,6 +65,10 @@ class EditionTest {
         assertTrue(Edition.JDBC.artifactMatchesConnector("cdata.jdbc.salesforce.jar", "Salesforce"));
         assertTrue(Edition.ODBC_UNIX.artifactMatchesConnector("libsalesforceodbc.x64.so", "salesforce"));
         assertTrue(Edition.ODBC_UNIX.artifactMatchesConnector("cdata.odbc.salesforce.ini", "salesforce"));
+        assertTrue(Edition.ODBC_UNIX.artifactMatchesConnector("cdata.odbcm.salesforce.jar", "salesforce"));
+        assertTrue(Edition.ODBC_WINDOWS.artifactMatchesConnector("CData.ODBCm.salesforce.dll", "salesforce"));
+        // the thin CData.ODBC. template must not also claim ODBCm files
+        assertEquals("salesforce", Edition.ODBC_WINDOWS.artifactConnector("CData.ODBCm.salesforce.dll"));
         assertTrue(Edition.PYTHON_MAC.artifactMatchesConnector("salesforce.setup_mac.zip", "salesforce"));
 
         assertFalse(Edition.JDBC.artifactMatchesConnector("cdata.jdbc.mysql.jar", "salesforce"));
