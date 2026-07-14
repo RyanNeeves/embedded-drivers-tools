@@ -5,8 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.List;
-
 import org.junit.jupiter.api.Test;
 
 class EditionTest {
@@ -31,19 +29,20 @@ class EditionTest {
     }
 
     @Test
-    void changelogPathIsFirstSegment() {
-        assertEquals("jdbc", Edition.JDBC.changelogPath());
-        assertEquals("ado", Edition.ADO_NET_FRAMEWORK.changelogPath());
-        assertEquals("odbc", Edition.ODBC_UNIX.changelogPath());
+    void buildsBucketPrefixes() {
+        Release r = new Release(2026, 0);
+        assertEquals("v26u0/jdbc/", Edition.JDBC.releasePrefix(r));
+        assertEquals("v26u0/ado/net40/", Edition.ADO_NET_FRAMEWORK.releasePrefix(r));
+        assertEquals("v26u0/ado/net40/bld-System.Data.CData.", Edition.ADO_NET_FRAMEWORK.markerPrefix(r));
+        assertEquals("changelogs/v25/jdbc/", Edition.JDBC.changelogPrefix(2025));
+        assertEquals("changelogs/v25/odbc/", Edition.ODBC_UNIX.changelogPrefix(2025));
     }
 
     @Test
-    void constructsArtifactFilenames() {
-        assertEquals(List.of("cdata.jdbc.salesforce.jar"), Edition.JDBC.artifactFilenames("Salesforce"));
-        assertEquals(List.of("CData.ODBC.salesforce.dll"), Edition.ODBC_WINDOWS.artifactFilenames("Salesforce"));
-        assertEquals(List.of("cdata.odbc.salesforce.ini", "libsalesforceodbc.x64.so"),
-                Edition.ODBC_UNIX.artifactFilenames("salesforce"));
-        assertEquals(List.of("salesforce.setup_win.zip"), Edition.PYTHON_WINDOWS.artifactFilenames("SALESFORCE"));
+    void extractsConnectorFromArtifact() {
+        assertEquals("salesforce", Edition.JDBC.artifactConnector("cdata.jdbc.salesforce.jar"));
+        assertEquals("salesforce", Edition.ODBC_UNIX.artifactConnector("libsalesforceodbc.x64.so"));
+        assertEquals(null, Edition.JDBC.artifactConnector("bld-cdata.jdbc.salesforce.9655"));
     }
 
     @Test

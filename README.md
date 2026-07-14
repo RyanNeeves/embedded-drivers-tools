@@ -70,6 +70,9 @@ java -jar cdrm.jar connectors --edition JDBC --major-version 2025
 java -jar cdrm.jar changelog -e jdbc -c Salesforce -v 2025 --after-release 2
 java -jar cdrm.jar changelog -e jdbc -c Salesforce -v 2025 --after-date 2025-10-28
 
+# Upgrading across major versions? Baseline against the old version's release:
+java -jar cdrm.jar changelog -e jdbc -c Salesforce -v 2026 --after-release 2025u2
+
 # Download a driver build
 java -jar cdrm.jar download -e jdbc -r latest -c Salesforce -o ./drivers
 

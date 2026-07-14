@@ -28,6 +28,17 @@ class ReleaseTest {
     }
 
     @Test
+    void parsesBaselineNumberOrFullRelease() {
+        assertEquals(new Release(2026, 2), Release.parseOrNumber("2", 2026));
+        assertEquals(new Release(2026, 0), Release.parseOrNumber("0", 2026));
+        assertEquals(new Release(2025, 3), Release.parseOrNumber("2025u3", 2026));
+        assertEquals(new Release(2025, 2), Release.parseOrNumber("v25u2", 2026));
+
+        assertThrows(IllegalArgumentException.class, () -> Release.parseOrNumber("-1", 2026));
+        assertThrows(IllegalArgumentException.class, () -> Release.parseOrNumber("garbage", 2026));
+    }
+
+    @Test
     void formatsTagAndLabel() {
         Release r = new Release(2025, 2);
         assertEquals("v25u2", r.tag());

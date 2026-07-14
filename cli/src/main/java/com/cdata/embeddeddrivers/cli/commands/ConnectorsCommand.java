@@ -14,7 +14,7 @@ import picocli.CommandLine.Option;
         description = "List the connectors available for an edition and major version.")
 public class ConnectorsCommand implements Callable<Integer> {
 
-    @Option(names = {"-e", "--edition"}, required = true, converter = EditionConverter.class,
+    @Option(names = {"-e", "--edition"}, required = true,
             description = "Driver edition: JDBC, ADO-NET-FRAMEWORK, ADO-NET-STANDARD, ODBC-UNIX, "
                     + "ODBC-WINDOWS, PYTHON-MAC, PYTHON-UNIX, PYTHON-WINDOWS.")
     Edition edition;
@@ -29,8 +29,7 @@ public class ConnectorsCommand implements Callable<Integer> {
         List<String> connectors = client.listConnectors(edition, majorVersion);
 
         if (connectors.isEmpty()) {
-            boolean versionExists = client.listReleases().stream().anyMatch(r -> r.year() == majorVersion);
-            if (!versionExists) {
+            if (!client.majorVersionExists(majorVersion)) {
                 System.err.println("Major version " + majorVersion
                         + " does not exist. Run 'cdrm releases' to see available versions.");
                 return 1;

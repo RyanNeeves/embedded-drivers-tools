@@ -1,6 +1,5 @@
 package com.cdata.embeddeddrivers.core;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -36,10 +35,6 @@ public enum Edition {
     /** A driver artifact filename shape: fixed prefix + lowercase connector name + fixed suffix. */
     public record ArtifactTemplate(String prefix, String suffix) {
 
-        public String filenameFor(String connectorName) {
-            return prefix + connectorName.toLowerCase(Locale.ROOT) + suffix;
-        }
-
         /** The connector-name portion of a matching filename, or null if the filename doesn't fit this template. */
         public String connectorOf(String filename) {
             if (filename.length() <= prefix.length() + suffix.length()) return null;
@@ -65,46 +60,43 @@ public enum Edition {
         return displayName;
     }
 
-    /** Path under a release prefix where this edition's builds live (e.g. "ado/net40"). */
-    public String subpath() {
-        return subpath;
+    /** Bucket prefix for this edition's files in a release (e.g. "v26u0/ado/net40/"). */
+    public String releasePrefix(Release release) {
+        return release.tag() + "/" + subpath + "/";
     }
 
-    /** Exact-cased bld-* marker prefix, usable directly as an S3 key prefix (e.g. "bld-System.Data.CData."). */
-    public String bldMarkerPrefix() {
-        return bldMarkerPrefix;
+    /** Bucket prefix matching exactly this edition's bld-* markers in a release. */
+    public String markerPrefix(Release release) {
+        return releasePrefix(release) + bldMarkerPrefix;
     }
 
-    /** Top-level changelog dir for this edition (e.g. "ADO .NET FRAMEWORK" -> "ado"). */
-    public String changelogPath() {
+    /** Bucket prefix for this edition's changelogs in a major version (e.g. "changelogs/v25/ado/"). */
+    public String changelogPrefix(int majorVersion) {
         int slash = subpath.indexOf('/');
-        return slash >= 0 ? subpath.substring(0, slash) : subpath;
+        String changelogDir = slash >= 0 ? subpath.substring(0, slash) : subpath;
+        return "changelogs/v" + (majorVersion % 100) + "/" + changelogDir + "/";
     }
 
-    /** The exact artifact filenames a connector publishes in this edition. */
-    public List<String> artifactFilenames(String connectorName) {
-        List<String> names = new ArrayList<>(artifactTemplates.size());
+    /**
+     * The connector name embedded in a driver artifact filename, or null if
+     * the filename is not an artifact of this edition (e.g. a bld-* marker).
+     */
+    public String artifactConnector(String filename) {
         for (ArtifactTemplate t : artifactTemplates) {
-            names.add(t.filenameFor(connectorName));
+            String name = t.connectorOf(filename);
+            if (name != null) return name;
         }
-        return names;
+        return null;
     }
 
     /** Whether a filename is a downloadable driver artifact of this edition (as opposed to a bld-* marker). */
     public boolean isDriverArtifact(String filename) {
-        for (ArtifactTemplate t : artifactTemplates) {
-            if (t.connectorOf(filename) != null) return true;
-        }
-        return false;
+        return artifactConnector(filename) != null;
     }
 
     /** Whether a driver artifact filename in this edition belongs to the given connector. */
     public boolean artifactMatchesConnector(String filename, String connectorName) {
-        for (ArtifactTemplate t : artifactTemplates) {
-            String name = t.connectorOf(filename);
-            if (name != null && name.equalsIgnoreCase(connectorName)) return true;
-        }
-        return false;
+        return connectorName.equalsIgnoreCase(artifactConnector(filename));
     }
 
     /**

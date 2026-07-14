@@ -15,7 +15,7 @@ class RootCommandTest {
     @Test
     void versionOptionPrintsVersion() {
         StringWriter out = new StringWriter();
-        CommandLine cmd = new CommandLine(new RootCommand());
+        CommandLine cmd = RootCommand.buildCommandLine();
         cmd.setOut(new PrintWriter(out));
 
         int exitCode = cmd.execute("--version");
@@ -27,7 +27,7 @@ class RootCommandTest {
     @Test
     void helpOptionExitsCleanly() {
         StringWriter out = new StringWriter();
-        CommandLine cmd = new CommandLine(new RootCommand());
+        CommandLine cmd = RootCommand.buildCommandLine();
         cmd.setOut(new PrintWriter(out));
 
         int exitCode = cmd.execute("--help");
@@ -39,7 +39,7 @@ class RootCommandTest {
     @Test
     void downloadRequiresConnectorOrAll() {
         StringWriter err = new StringWriter();
-        CommandLine cmd = new CommandLine(new RootCommand());
+        CommandLine cmd = RootCommand.buildCommandLine();
         cmd.setErr(new PrintWriter(err));
 
         int exitCode = cmd.execute("download", "-e", "jdbc", "-r", "latest");
@@ -50,11 +50,24 @@ class RootCommandTest {
     @Test
     void downloadRejectsConnectorCombinedWithAll() {
         StringWriter err = new StringWriter();
-        CommandLine cmd = new CommandLine(new RootCommand());
+        CommandLine cmd = RootCommand.buildCommandLine();
         cmd.setErr(new PrintWriter(err));
 
         int exitCode = cmd.execute("download", "-e", "jdbc", "-r", "latest", "-c", "salesforce", "--all");
 
         assertEquals(2, exitCode, "--connector and --all together should be a usage error");
+    }
+
+    @Test
+    void unknownEditionIsUsageErrorWithLenientParserMessage() {
+        StringWriter err = new StringWriter();
+        CommandLine cmd = RootCommand.buildCommandLine();
+        cmd.setErr(new PrintWriter(err));
+
+        int exitCode = cmd.execute("download", "-e", "cobol", "-r", "latest", "--all");
+
+        assertEquals(2, exitCode);
+        assertTrue(err.toString().contains("Unknown edition"),
+                "registered Edition converter should produce the lenient parser's message");
     }
 }

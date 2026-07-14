@@ -8,7 +8,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.cdata.embeddeddrivers.core.BuildNumbers;
 import com.cdata.embeddeddrivers.core.Changelog;
 import com.cdata.embeddeddrivers.core.Edition;
 import com.cdata.embeddeddrivers.core.OemBuildsClient;
@@ -46,12 +45,6 @@ public class ChangelogReviewServer {
                 .content(Collections.singletonList((McpSchema.Content) new TextContent(message)))
                 .isError(true)
                 .build();
-    }
-
-    private static String stripTrailing(String s) {
-        int i = s.length() - 1;
-        while (i >= 0 && Character.isWhitespace(s.charAt(i))) i--;
-        return i < 0 ? "" : s.substring(0, i + 1);
     }
 
     private static List<String> editionDisplayNames() {
@@ -140,7 +133,7 @@ public class ChangelogReviewServer {
                 sb.append(String.format("  %s  (major_version: %d, release_number: %d)%n",
                         r.label(), r.year(), r.releaseNumber()));
             }
-            return ok(stripTrailing(sb.toString()));
+            return ok(sb.toString().stripTrailing());
         } catch (Exception e) {
             e.printStackTrace(System.err);
             return err("Error listing releases: " + e.getMessage());
@@ -179,8 +172,7 @@ public class ChangelogReviewServer {
 
         if (connectors.isEmpty()) {
             try {
-                boolean exists = CLIENT.listReleases().stream().anyMatch(r -> r.year() == majorVersion);
-                if (!exists) {
+                if (!CLIENT.majorVersionExists(majorVersion)) {
                     return err("Major version " + majorVersion + " does not exist. Call list_releases to see available major versions.");
                 }
             } catch (Exception ignored) {
@@ -194,7 +186,7 @@ public class ChangelogReviewServer {
         for (String s : connectors) {
             sb.append("  ").append(s).append('\n');
         }
-        return ok(stripTrailing(sb.toString()));
+        return ok(sb.toString().stripTrailing());
     }
 
     // ============================================================
@@ -243,17 +235,8 @@ public class ChangelogReviewServer {
 
         int baselineBuild;
         try {
-            if (afterDate != null) {
-                baselineBuild = BuildNumbers.fromDate(afterDate);
-            } else if (afterBuild != null) {
-                if (afterBuild < 1) return err("after_build must be a positive build number.");
-                baselineBuild = afterBuild;
-            } else {
-                if (afterReleaseNumber < 1) {
-                    return err("after_release_number must be >= 1. Use the U-number directly from list_releases (e.g. 1 for U1, 2 for U2).");
-                }
-                baselineBuild = CLIENT.releaseToBuildNumber(majorVersion, afterReleaseNumber, edition, objName);
-            }
+            baselineBuild = CLIENT.resolveBaseline(edition, majorVersion, objName,
+                    afterReleaseNumber != null ? afterReleaseNumber.toString() : null, afterDate, afterBuild);
         } catch (IllegalArgumentException e) {
             return err(appendConnectorHint(e.getMessage(), edition, majorVersion));
         } catch (Exception e) {
@@ -295,7 +278,7 @@ public class ChangelogReviewServer {
         for (String line : result.entries()) {
             sb.append(line).append('\n');
         }
-        return ok(stripTrailing(sb.toString()));
+        return ok(sb.toString().stripTrailing());
     }
 
     // ============================================================

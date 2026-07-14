@@ -36,4 +36,24 @@ public record Release(int year, int releaseNumber) implements Comparable<Release
         if (year < 100) year += 2000;
         return new Release(year, Integer.parseInt(m.group(2)));
     }
+
+    /**
+     * Parses either a bare U-number, meaning a release within
+     * {@code defaultYear} (e.g. "2" for U2), or a full release in any major
+     * version like "2025u3".
+     */
+    public static Release parseOrNumber(String input, int defaultYear) {
+        String s = input.trim();
+        int u;
+        try {
+            u = Integer.parseInt(s);
+        } catch (NumberFormatException e) {
+            return parse(s);
+        }
+        if (u < 0) {
+            throw new IllegalArgumentException(
+                    "The release number must be >= 0 (the U-number, e.g. 2 for U2).");
+        }
+        return new Release(defaultYear, u);
+    }
 }

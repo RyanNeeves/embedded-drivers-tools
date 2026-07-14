@@ -7,7 +7,7 @@
   <parent>
     <groupId>com.cdata.embeddeddrivers</groupId>
     <artifactId>embedded-drivers-tools</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.2</version>
   </parent>
 
   <artifactId>embedded-drivers-core</artifactId>

@@ -26,7 +26,7 @@ import picocli.CommandLine.Option;
         description = "Download driver builds for a release, either single connectors or the full edition.")
 public class DownloadCommand implements Callable<Integer> {
 
-    @Option(names = {"-e", "--edition"}, required = true, converter = EditionConverter.class,
+    @Option(names = {"-e", "--edition"}, required = true,
             description = "Driver edition: JDBC, ADO-NET-FRAMEWORK, ADO-NET-STANDARD, ODBC-UNIX, "
                     + "ODBC-WINDOWS, PYTHON-MAC, PYTHON-UNIX, PYTHON-WINDOWS.")
     Edition edition;

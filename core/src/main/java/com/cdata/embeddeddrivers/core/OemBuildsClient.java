@@ -27,7 +27,6 @@ import java.util.regex.Pattern;
 public class OemBuildsClient {
 
     public static final String BASE_URL = "https://downloads.cdata.com/cdataoembuilds";
-    private static final String CHANGELOG_ROOT = BASE_URL + "/changelogs";
 
     /** Releases that predate bld-* markers in the bucket, mapped to their build numbers. */
     private static final Map<Release, Integer> HARDCODED_RELEASES = Map.of(new Release(2025, 1), 9434);
@@ -124,6 +123,14 @@ public class OemBuildsClient {
         return releases.get(0);
     }
 
+    /** Whether any release exists for the given major version year. */
+    public boolean majorVersionExists(int year) throws IOException {
+        for (Release r : listReleases()) {
+            if (r.year() == year) return true;
+        }
+        return false;
+    }
+
     /** Validates that a release exists in the bucket (or is a known hardcoded release). */
     public void requireRelease(Release release) throws IOException {
         List<Release> releases = listReleases();
@@ -136,7 +143,7 @@ public class OemBuildsClient {
 
     /** Lists the connector names that have changelogs for an edition and major version, sorted. */
     public List<String> listConnectors(Edition edition, int majorVersion) throws IOException {
-        String clPrefix = "changelogs/v" + (majorVersion % 100) + "/" + edition.changelogPath() + "/";
+        String clPrefix = edition.changelogPrefix(majorVersion);
         Set<String> names = new TreeSet<>();
         for (RemoteFile f : listFiles(clPrefix)) {
             String rest = f.key().substring(clPrefix.length());
@@ -147,18 +154,15 @@ public class OemBuildsClient {
     }
 
     /**
-     * Resolves a release (major version + U-number) to its build number via
-     * hardcoded releases or S3 build marker lookup.
+     * Resolves a release to its build number for a connector via hardcoded
+     * releases or S3 build marker lookup.
      */
-    public int releaseToBuildNumber(int majorVersion, int releaseNumber, Edition edition, String connectorName)
+    public int releaseToBuildNumber(Release release, Edition edition, String connectorName)
             throws IOException {
-        Release release = new Release(majorVersion, releaseNumber);
-
         Integer hardcoded = HARDCODED_RELEASES.get(release);
         if (hardcoded != null) return hardcoded;
 
-        String markerPrefix = release.tag() + "/" + edition.subpath() + "/" + edition.bldMarkerPrefix();
-        for (RemoteFile f : listFiles(markerPrefix)) {
+        for (RemoteFile f : listFiles(edition.markerPrefix(release))) {
             int build = edition.markerBuild(f.filename(), connectorName);
             if (build >= 0) return build;
         }
@@ -170,12 +174,35 @@ public class OemBuildsClient {
     }
 
     /**
+     * Resolves a changelog baseline build number from exactly one of a
+     * release, an ISO date, or an explicit build number. The release may be a
+     * bare U-number within {@code majorVersion} or a full release in any major
+     * version (e.g. "2025u3") - build numbers are days since 2000-01-01, so
+     * they are comparable across major versions. Callers ensure only one
+     * baseline is non-null; value validation happens here.
+     */
+    public int resolveBaseline(Edition edition, int majorVersion, String connectorName,
+            String afterRelease, String afterDate, Integer afterBuild) throws IOException {
+        if (afterDate != null) {
+            return BuildNumbers.fromDate(afterDate);
+        }
+        if (afterBuild != null) {
+            if (afterBuild < 1) throw new IllegalArgumentException("The build number must be positive.");
+            return afterBuild;
+        }
+        if (afterRelease == null) {
+            throw new IllegalArgumentException("No baseline given: provide a release number, date, or build number.");
+        }
+        return releaseToBuildNumber(Release.parseOrNumber(afterRelease, majorVersion), edition, connectorName);
+    }
+
+    /**
      * Fetches the raw changelog CSV for a connector. Returns null if the
      * changelog does not exist (HTTP 404).
      */
     public String fetchChangelogCsv(Edition edition, int majorVersion, String connectorName) throws IOException {
-        String url = CHANGELOG_ROOT + "/v" + (majorVersion % 100) + "/" + edition.changelogPath()
-                + "/" + connectorName.toLowerCase(Locale.ROOT) + "/changelog.csv";
+        String url = BASE_URL + "/" + edition.changelogPrefix(majorVersion)
+                + connectorName.toLowerCase(Locale.ROOT) + "/changelog.csv";
         HttpResult res = get(url);
         if (res.status() == 404) return null;
         if (res.status() != 200) {
@@ -187,7 +214,7 @@ public class OemBuildsClient {
     /** Lists the downloadable driver artifacts for a release and edition (excludes bld-* markers). */
     public List<RemoteFile> listDriverFiles(Release release, Edition edition) throws IOException {
         List<RemoteFile> artifacts = new ArrayList<>();
-        for (RemoteFile f : listFiles(release.tag() + "/" + edition.subpath() + "/")) {
+        for (RemoteFile f : listFiles(edition.releasePrefix(release))) {
             if (edition.isDriverArtifact(f.filename())) artifacts.add(f);
         }
         return artifacts;
@@ -203,17 +230,18 @@ public class OemBuildsClient {
         Files.createDirectories(destDir);
         Path dest = destDir.resolve(file.filename());
         Path part = destDir.resolve(file.filename() + ".part");
-        HttpRequest request = HttpRequest.newBuilder(URI.create(file.url())).GET().build();
+        String url = BASE_URL + "/" + file.key();
+        HttpRequest request = HttpRequest.newBuilder(URI.create(url)).GET().build();
         try {
             HttpResponse<Path> response = http.send(request, HttpResponse.BodyHandlers.ofFile(part));
             if (response.statusCode() != 200) {
-                throw new IOException("HTTP " + response.statusCode() + " downloading " + file.url());
+                throw new IOException("HTTP " + response.statusCode() + " downloading " + url);
             }
             Files.move(part, dest, StandardCopyOption.REPLACE_EXISTING);
             return dest;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IOException("Interrupted while downloading " + file.url(), e);
+            throw new IOException("Interrupted while downloading " + url, e);
         } finally {
             Files.deleteIfExists(part);
         }

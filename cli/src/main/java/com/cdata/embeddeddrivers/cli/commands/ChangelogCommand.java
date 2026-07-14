@@ -2,7 +2,6 @@ package com.cdata.embeddeddrivers.cli.commands;
 
 import java.util.concurrent.Callable;
 
-import com.cdata.embeddeddrivers.core.BuildNumbers;
 import com.cdata.embeddeddrivers.core.Changelog;
 import com.cdata.embeddeddrivers.core.Edition;
 import com.cdata.embeddeddrivers.core.OemBuildsClient;
@@ -16,7 +15,7 @@ import picocli.CommandLine.Option;
         description = "Show changelog entries for a connector since a release, date, or build.")
 public class ChangelogCommand implements Callable<Integer> {
 
-    @Option(names = {"-e", "--edition"}, required = true, converter = EditionConverter.class,
+    @Option(names = {"-e", "--edition"}, required = true,
             description = "Driver edition: JDBC, ADO-NET-FRAMEWORK, ADO-NET-STANDARD, ODBC-UNIX, "
                     + "ODBC-WINDOWS, PYTHON-MAC, PYTHON-UNIX, PYTHON-WINDOWS.")
     Edition edition;
@@ -34,8 +33,10 @@ public class ChangelogCommand implements Callable<Integer> {
 
     static class Baseline {
         @Option(names = "--after-release",
-                description = "Show entries after this U-number (e.g. 2 for U2).")
-        Integer afterRelease;
+                description = "Show entries after this release: a U-number within the queried "
+                        + "major version (e.g. 2 for U2), or a full release in any major version "
+                        + "(e.g. 2025u3) for cross-version baselines.")
+        String afterRelease;
 
         @Option(names = "--after-date",
                 description = "Show entries after this date (YYYY-MM-DD).")
@@ -52,21 +53,8 @@ public class ChangelogCommand implements Callable<Integer> {
 
         int baselineBuild;
         try {
-            if (baseline.afterDate != null) {
-                baselineBuild = BuildNumbers.fromDate(baseline.afterDate);
-            } else if (baseline.afterBuild != null) {
-                if (baseline.afterBuild < 1) {
-                    System.err.println("--after-build must be a positive build number.");
-                    return 2;
-                }
-                baselineBuild = baseline.afterBuild;
-            } else {
-                if (baseline.afterRelease < 1) {
-                    System.err.println("--after-release must be >= 1 (the U-number, e.g. 2 for U2).");
-                    return 2;
-                }
-                baselineBuild = client.releaseToBuildNumber(majorVersion, baseline.afterRelease, edition, connector);
-            }
+            baselineBuild = client.resolveBaseline(edition, majorVersion, connector,
+                    baseline.afterRelease, baseline.afterDate, baseline.afterBuild);
         } catch (IllegalArgumentException e) {
             System.err.println(e.getMessage());
             System.err.println("Run 'cdrm connectors' to see valid connector names, or 'cdrm releases' for releases.");
