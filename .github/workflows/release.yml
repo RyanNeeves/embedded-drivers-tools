@@ -1,0 +1,55 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build all modules
+        run: mvn package -q
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            mcp/target/cdata-changelog-review-mcp.jar
+            cli/target/cdrm.jar
+          generate_release_notes: true
+
+      - name: Publish release branch with built JAR
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Build a flat release branch with only the JAR and plugin.json
+          TMPDIR=$(mktemp -d)
+          cp mcp/target/cdata-changelog-review-mcp.jar "$TMPDIR/"
+          cp -r mcp/.claude-plugin "$TMPDIR/"
+
+          git checkout --orphan release-tmp
+          git rm -rf . > /dev/null 2>&1
+          git clean -fdx > /dev/null 2>&1
+
+          cp "$TMPDIR/cdata-changelog-review-mcp.jar" .
+          cp -r "$TMPDIR/.claude-plugin" .
+
+          git add cdata-changelog-review-mcp.jar .claude-plugin/
+          git commit -m "Release ${{ github.ref_name }}"
+          git push -f origin HEAD:release
+          rm -rf "$TMPDIR"
