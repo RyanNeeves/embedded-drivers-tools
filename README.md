@@ -3,7 +3,7 @@
 Tools for working with CData embedded / OEM drivers:
 
 - **CData Release Manager (`cdrm`)** — a command-line tool to browse releases,
-  review connector changelogs, and download driver builds (single connectors
+  review connector changelogs, and download builds (single connectors
   or entire editions).
 - **CData Changelog Review** — an MCP server / Claude Code plugin that lets AI
   assistants answer questions like *"What changed in the Salesforce JDBC
