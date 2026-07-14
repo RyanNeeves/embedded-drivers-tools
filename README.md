@@ -112,8 +112,7 @@ run unmodified on Windows, Linux, and macOS.
 
 ## License
 
-Licensed under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for
-attributions.
+Licensed under the [Apache License 2.0](LICENSE).
 
 "CData" and associated logos are trademarks of CData Software, Inc. This
 license does not grant permission to use the trade names, trademarks, service
